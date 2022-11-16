@@ -8,31 +8,29 @@ export default class TicketService {
    */
 
   purchaseTickets(accountId, ...ticketTypeRequests) {
-    let returnValue = -1;
 
-    if(accountId <= 0){
+    if(accountId <= 0)
       throw new InvalidPurchaseException(`Invalid account Id: ${accountId}`);
-    }
 
     if(ticketTypeRequests.length <= 0)
       throw new InvalidPurchaseException("Tickets cannot be less than 1");
-    if(ticketTypeRequests.length > 20)
+
+    if(ticketTypeRequests[0].length > 20)
       throw new InvalidPurchaseException("Maximum number of tickets exceeded");
 
+    const hasAdult = ticketTypeRequests[0].some((ticket) => ticket.getTicketType() === 'ADULT');
+    if(!hasAdult)
+      throw new InvalidPurchaseException("At-least one adult ticket must be purchased");
 
-    let ticketType = this.#getNumSeatsAmount(...ticketTypeRequests);
-
+    let { totalAmount, noAdult, noChild } = this.#getNumSeatsAmount(...ticketTypeRequests);
+    let totalAllocation = noAdult + noChild;
     // Make payment
-    new TicketPaymentService().makePayment(accountId, ticketType.totalAmount);
+    new TicketPaymentService().makePayment(accountId, totalAmount);
 
     // Reserve seats
-    new SeatReservationService().reserveSeat(accountId, ticketType.noAdult + ticketType.noChild)
+    new SeatReservationService().reserveSeat(accountId, totalAllocation);
 
-    // Return total amount and number of seats, if everything works smoothly
-    returnValue = [ticketType.totalAmount, ticketType.noAdult + ticketType.noChild];
-
-
-    return returnValue;
+    return { totalAmount, totalAllocation };
   }
 
   // Gets the number of seats for each category of Ticket
@@ -40,7 +38,7 @@ export default class TicketService {
     let noInfant = 0;
     let noChild = 0;
     let noAdult = 0;
-    let totalAmount = 0;
+
     let amount = {
       infant : 0,
       child : 10,
@@ -62,8 +60,7 @@ export default class TicketService {
       }
     });
 
-    // Get the total amount to pay
-    totalAmount = amount.infant * noInfant + amount.child * noChild + amount.adult * noAdult;
+    let totalAmount = amount.infant * noInfant + amount.child * noChild + amount.adult * noAdult;
 
     // Assumption: Only one Adult or Child is permitted to hold one Infant
     if(noAdult + noChild < noInfant){
